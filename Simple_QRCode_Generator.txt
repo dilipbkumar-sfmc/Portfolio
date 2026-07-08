@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Aldar QR Code Generator</title>
+<link rel="icon" href="https://www.aldar.com/favicon.ico" type="image/x-icon" sizes="32x32"/>  
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    background: #f0f0f0;
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 40px 20px;
+  }
+  .container {
+    width: 100%;
+    max-width: 680px;
+    background: #fff;
+    padding: 40px;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,.12);
+  }
+  h2 { text-align: center; font-size: 22px; margin-bottom: 28px; color: #111; }
+  label { font-size: 13px; font-weight: bold; color: #444; display: block; margin-bottom: 6px; }
+  input[type="text"] {
+    width: 100%;
+    padding: 13px 14px;
+    font-size: 15px;
+    border: 1.5px solid #ccc;
+    border-radius: 6px;
+    outline: none;
+    transition: border-color .2s;
+  }
+  input[type="text"]:focus { border-color: #000; }
+  .btn-row { margin-top: 16px; display: flex; gap: 10px; flex-wrap: wrap; }
+  button {
+    padding: 12px 24px;
+    font-size: 15px;
+    font-weight: bold;
+    cursor: pointer;
+    border: none;
+    border-radius: 6px;
+    transition: background .2s;
+  }
+  .btn-generate { background: #000; color: #fff; }
+  .btn-generate:hover { background: #222; }
+  .btn-dl { background: #e8e8e8; color: #000; }
+  .btn-dl:hover { background: #d0d0d0; }
+  .btn-dl:disabled { background: #f0f0f0; color: #aaa; cursor: not-allowed; }
+  #status { margin-top: 14px; font-size: 13px; color: #555; min-height: 18px; text-align: center; }
+  #status.error { color: #c00; }
+  #status.success { color: #1a7a1a; }
+  #qr-wrapper { margin-top: 30px; display: flex; justify-content: center; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h2>Aldar QR Code Generator</h2>
+  <label for="url">Paste the URL</label>
+  <input type="text" id="url" placeholder="https://cloud.communication.aldar.com/..." />
+  <div class="btn-row">
+    <button class="btn-generate" onclick="generateQR()">Generate QR</button>
+    <button class="btn-dl" id="btnPNG" onclick="downloadPNG()" disabled>⬇ Download PNG</button>
+    <button class="btn-dl" id="btnSVG" onclick="downloadSVG()" disabled>⬇ Download SVG</button>
+  </div>
+  <div id="status"></div>
+  <div id="qr-wrapper">
+    <canvas id="qr-canvas" style="display:none;"></canvas>
+  </div>
+</div>
+
+<script>
+  const QR_SIZE = 500;
+  const LOGO_DATA_URI = "data:image/png;base64,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";
+  let currentURL = "";
+  let finalCanvas = null;
+
+  function setStatus(msg, type = "") {
+    const el = document.getElementById("status");
+    el.textContent = msg;
+    el.className = type;
+  }
+
+  function generateQR() {
+    const url = document.getElementById("url").value.trim();
+    if (!url) { alert("Please enter a URL."); return; }
+    try { new URL(url); } catch(e) { alert("Please enter a valid URL (include https://)."); return; }
+
+    currentURL = url;
+    finalCanvas = null;
+    document.getElementById("btnPNG").disabled = true;
+    document.getElementById("btnSVG").disabled = true;
+    setStatus("Generating QR code…");
+
+    // Step 1: render QR into a temp div
+    const tempDiv = document.createElement("div");
+    tempDiv.style.position = "absolute";
+    tempDiv.style.left = "-9999px";
+    document.body.appendChild(tempDiv);
+
+    new QRCode(tempDiv, {
+      text: url,
+      width: QR_SIZE,
+      height: QR_SIZE,
+      colorDark: "#000000",
+      colorLight: "#ffffff",
+      correctLevel: QRCode.CorrectLevel.H
+    });
+
+    setTimeout(() => {
+      const srcCanvas = tempDiv.querySelector("canvas");
+      if (!srcCanvas) {
+        setStatus("QR generation failed. Try again.", "error");
+        document.body.removeChild(tempDiv);
+        return;
+      }
+
+      // Step 2: composite QR + logo onto output canvas
+      const out = document.createElement("canvas");
+      out.width  = QR_SIZE;
+      out.height = QR_SIZE;
+      const ctx = out.getContext("2d");
+
+      // Draw QR
+      ctx.drawImage(srcCanvas, 0, 0, QR_SIZE, QR_SIZE);
+      document.body.removeChild(tempDiv);
+
+      // Step 3: draw logo centered
+      const logo = new Image();
+      logo.onload = () => {
+        // Logo occupies ~22% of QR width, keeping aspect ratio square (logo PNG is square)
+        const logoSize = Math.round(QR_SIZE * 0.22);
+        const logoX = (QR_SIZE - logoSize) / 2;
+        const logoY = (QR_SIZE - logoSize) / 2;
+
+        // White padding behind logo
+        const pad = 6;
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(logoX - pad, logoY - pad, logoSize + pad * 2, logoSize + pad * 2);
+
+        // Draw logo image
+        ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
+
+        // Show preview on page canvas
+        const previewCanvas = document.getElementById("qr-canvas");
+        previewCanvas.width  = QR_SIZE;
+        previewCanvas.height = QR_SIZE;
+        previewCanvas.style.display = "block";
+        const pCtx = previewCanvas.getContext("2d");
+        pCtx.drawImage(out, 0, 0);
+
+        finalCanvas = out;
+        document.getElementById("btnPNG").disabled = false;
+        document.getElementById("btnSVG").disabled = false;
+        setStatus("QR code ready ✓", "success");
+      };
+      logo.onerror = () => setStatus("Logo failed to load.", "error");
+      logo.src = LOGO_DATA_URI;
+    }, 200);
+  }
+
+  function downloadPNG() {
+    if (!finalCanvas) { alert("Generate a QR code first."); return; }
+    const link = document.createElement("a");
+    link.download = "Aldar-QR.png";
+    link.href = finalCanvas.toDataURL("image/png");
+    link.click();
+    setStatus("PNG downloaded ✓", "success");
+  }
+
+  function downloadSVG() {
+    if (!finalCanvas) { alert("Generate a QR code first."); return; }
+    const dataURL = finalCanvas.toDataURL("image/png");
+    const svgContent = `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+     width="${QR_SIZE}" height="${QR_SIZE}" viewBox="0 0 ${QR_SIZE} ${QR_SIZE}">
+  <image width="${QR_SIZE}" height="${QR_SIZE}" xlink:href="${dataURL}"/>
+</svg>`;
+    const blob = new Blob([svgContent], { type: "image/svg+xml" });
+    const link = document.createElement("a");
+    link.download = "Aldar-QR.svg";
+    link.href = URL.createObjectURL(blob);
+    link.click();
+    setStatus("SVG downloaded ✓", "success");
+  }
+</script>
+</body>
+</html>
